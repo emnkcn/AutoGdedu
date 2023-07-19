@@ -1,8 +1,10 @@
+import logging
 import math
 import pickle
 import random
 import re
 import time
+import traceback
 
 from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException
 from selenium.webdriver.common.by import By
@@ -17,6 +19,22 @@ import base64
 from selenium.webdriver.support.wait import WebDriverWait
 
 scene = 0
+
+# 配置日志记录器
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
+
+# 创建文件处理器
+file_handler = logging.FileHandler('error.log')
+file_handler.setLevel(logging.ERROR)
+
+# 配置日志格式
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# 将处理器添加到记录器
+logger.addHandler(file_handler)
+
 
 def short_sleep():
     interval = random.uniform(2, 4)
@@ -92,7 +110,7 @@ def login_dialog(image_base64=None) -> tuple:
 
 def public_required_course():
     chrome_options = uc.ChromeOptions()
-    # chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--headless')
     driver = uc.Chrome(options=chrome_options,
                        driver_executable_path='./undetected_chromedriver.exe')
 
@@ -249,15 +267,16 @@ def happy_holiday():
     # 课程列表
     classes = driver.find_elements(By.CSS_SELECTOR, 'body > div.content > div.layout > div.news > ul > li')
     class_list_handle = driver.current_window_handle
-    # TODO: 学完一个课程后classes是否会失效？
     for class_element in classes:
         class_title = class_element.find_element(By.CSS_SELECTOR, 'div.news_wrap > div.news_content > a > h2').text
         hours_desc = class_element.find_element(By.CSS_SELECTOR, 'div.news_time > div:nth-child(3)').text
         pattern = r'\d+'
         numbers = re.findall(pattern, hours_desc)
         print(f'{class_title} {hours_desc}')
-        if numbers[0] == numbers[1]:
+        if len(numbers) != 2 or numbers[0] == numbers[1]:
             continue
+        time_needed = int(numbers[1]) * 60
+        time_left = time_needed
         class_link_element = class_element.find_element(By.CSS_SELECTOR, 'div.news_wrap > div.news_content > a')
         if not class_link_element.is_displayed():
             driver.execute_script("arguments[0].scrollIntoView();", class_link_element)
@@ -266,31 +285,46 @@ def happy_holiday():
         # 切换到课程目录页面
         driver.switch_to.window(driver.window_handles[-1])
         # 开始学习
-        driver.find_element(By.CSS_SELECTOR, '#startStudy').click()
+        WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '#startStudy'))).click()
         short_sleep()
-        # 处理学习指南弹窗
-        try:
-            driver.find_element(By.CSS_SELECTOR, '#notice-dialog > div.guide-footer > label > input').click()
-            driver.find_element(By.CSS_SELECTOR, '#guideKnow').click()
-            time.sleep(10)
-            guide_know_element = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#guideKnow')))
-            guide_know_element.click()
-        except NoSuchElementException:
-            print('no notice')
-
-        short_sleep()
-        # 处理提示弹窗
-        try:
-            driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
-        except NoSuchElementException:
-            pass
 
         # 遍历目录
         toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
         for i in range(len(toc)):
             lesson = toc[i]
+            # 处理学习指南弹窗
+            try:
+                driver.find_element(By.CSS_SELECTOR, '#notice-dialog > div.guide-footer > label > input').click()
+                time.sleep(10)
+                guide_know_element = WebDriverWait(driver, 20).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, '#guideKnow')))
+                guide_know_element.click()
+                short_sleep()
+            except NoSuchElementException:
+                pass
+
+            # 处理提示弹窗
+            try:
+                driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
+                toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
+                lesson = toc[i]
+                short_sleep()
+            except NoSuchElementException:
+                pass
+
             chapter_title = lesson.parent.find_element(By.CSS_SELECTOR, '.chapter-title').text
             name = lesson.find_element(By.CSS_SELECTOR, 'span.two').text
+
+            if time_left <= 0:
+                print(f'{class_title} 已修够学时')
+                break
+            total_time = lesson.find_element(By.CSS_SELECTOR, 'span.three').text
+            pattern = r'\d+'
+            numbers = re.findall(pattern, total_time)
+            total_time_minutes = int(numbers[1])
+            time_left = time_left - total_time_minutes
+
             progress = lesson.find_element(By.CSS_SELECTOR, 'span.four').text
             if progress != '100%':
                 print(f'{chapter_title}/{name} {progress} 开始学习')
@@ -302,13 +336,10 @@ def happy_holiday():
             lesson.click()
             short_sleep()
 
-            try:
-                driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
-            except NoSuchElementException:
-                pass
-
             while True:
-
+                lesson = driver.find_element(By.CSS_SELECTOR, 'div.video-title.on')
+                chapter_title = lesson.parent.find_element(By.CSS_SELECTOR, '.chapter-title').text
+                name = lesson.find_element(By.CSS_SELECTOR, 'span.two').text
                 # 答题
                 try:
                     number = ''
@@ -325,14 +356,27 @@ def happy_holiday():
                         print(f'{chapter_title}/{name} 课堂练习 {number}')
                         print(f'{question_wrapper.find_element(By.CSS_SELECTOR, "div.question-body").text}')
                         print(f'尝试选择答案{answer}')
-                        question_wrapper.find_element(By.CSS_SELECTOR, f'div.question-body > ul > li:nth-child({answer}) > i').click()
+                        question_wrapper.find_element(By.CSS_SELECTOR,
+                                                      f'div.question-body > ul > li:nth-child({answer}) > i').click()
                         question_wrapper.find_element(By.CSS_SELECTOR, '#submit').click()
                         question_wrapper = driver.find_element(By.CSS_SELECTOR, 'div.question-wrapper')
-                        if 'success' not in question_wrapper.find_element(By.CSS_SELECTOR, '#my-answer').get_attribute('class'):
+
+                        if 'success' not in question_wrapper.find_element(By.CSS_SELECTOR, '#my-answer').get_attribute(
+                                'class'):
                             print('回答错误')
                             answer = answer + 1
+                        else:
+                            print('回答正确')
+
+                        # 最后一道题回答后可能出现弹窗
+                        try:
+                            driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
+                        except NoSuchElementException:
+                            pass
+                        short_sleep()
                         question_wrapper.find_element(By.CSS_SELECTOR, '#submit').click()
                         # 全部回答完毕，自动跳到下一章，同时弹窗
+                        time.sleep(5)
                         try:
                             driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
                         except NoSuchElementException:
@@ -342,24 +386,42 @@ def happy_holiday():
 
                 video_player = driver.find_element(By.CSS_SELECTOR, '#video-Player')
                 if 'xgplayer-pause' in video_player.get_attribute('class'):
-                    video_player.find_element(By.CSS_SELECTOR, 'xg-start').click()
-                    short_sleep()
-                # TODO: how to get time?
-                time_e = video_player.find_element(By.CSS_SELECTOR, 'xg-time')
-                time_current1 = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-time > '
-                                                                          'span.xgplayer-time-current')
-                time_total1 = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-time > span:nth-child(2)')
-                time_current = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-time > '
-                                                                          'span.xgplayer-time-current').text
-                time_total = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-time > span:nth-child(2)').text
-                print(f'{chapter_title}/{name} {time_current}/{time_total}')
+                    try:
+                        video_player.find_element(By.CSS_SELECTOR, 'xg-start').click()
+                        short_sleep()
+                    except ElementClickInterceptedException:
+                        try:
+                            driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
+                        except NoSuchElementException:
+                            pass
+                if 'xgplayer-volume-muted' not in video_player.get_attribute('class'):
+                    try:
+                        video_player.find_element(By.CSS_SELECTOR, 'xg-volume').click()
+                    except Exception:
+                        pass
 
-                if time_current and time_total1 and time_current == time_total:
+                current_lesson = driver.find_element(By.CSS_SELECTOR, '#video-tabContent div.video-title.clearfix.on')
+                progress = current_lesson.find_element(By.CSS_SELECTOR, '.four').text
+                print(f'{chapter_title}/{name} {progress}')
+
+                if progress == '100%':
                     print(f'{chapter_title}/{name} 已完成')
-                    continue
-                long_sleep()
-            toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
+                    break
 
+                # 判断学时有没有修够，修够就换下一课
+                toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
+                total_viewed_time = 0
+                for item in toc:
+                    if 'on' in item.get_attribute('class'):
+                        break
+                    pattern = r'\d+'
+                    numbers = re.findall(pattern, item.find_element(By.CSS_SELECTOR, 'span.three').text)
+                    total_viewed_time += int(numbers[1]) + int(numbers[0]) * 60
+                if total_viewed_time > time_needed:
+                    print(f'{chapter_title}/{name} 已修时间 {total_viewed_time}')
+                    break
+
+                long_sleep()
         driver.close()
         driver.switch_to.window(class_list_handle)
 
@@ -369,12 +431,17 @@ def happy_holiday():
 
 
 if __name__ == '__main__':
-    print(r'''
+    try:
+        print(r'''
 1. 公需课
 2. 暑期教师研修班
-    ''')
-    scene = input('选择：')
-    if scene == '1':
-        public_required_course()
-    else:
-        happy_holiday()
+        ''')
+        scene = input('选择：')
+        if scene == '1':
+            public_required_course()
+        else:
+            happy_holiday()
+    except Exception as e:
+        print(traceback.format_exc())
+        logger.error(traceback.format_exc())
+        input()
