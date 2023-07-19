@@ -237,7 +237,7 @@ def public_required_course():
 
 def happy_holiday():
     chrome_options = uc.ChromeOptions()
-    # chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--headless')
     driver = uc.Chrome(options=chrome_options,
                        driver_executable_path='./undetected_chromedriver.exe')
 
