@@ -237,7 +237,7 @@ def public_required_course():
 
 def happy_holiday():
     chrome_options = uc.ChromeOptions()
-    chrome_options.add_argument('--headless')
+    # chrome_options.add_argument('--headless')
     driver = uc.Chrome(options=chrome_options,
                        driver_executable_path='./undetected_chromedriver.exe')
 
@@ -349,10 +349,18 @@ def happy_holiday():
                         # 答题结束后这个div也不会删除
                         if not question_wrapper.is_displayed():
                             break
-                        current_number = question_wrapper.find_element(By.CSS_SELECTOR, "span.number").text
-                        if current_number != number:
-                            number = current_number
-                            answer = 1
+
+                        number = ''
+                        answer = 1
+                        # 中间蹦出来的题目没有题号
+                        try:
+                            current_number = question_wrapper.find_element(By.CSS_SELECTOR, "span.number").text
+                            if current_number != number:
+                                number = current_number
+                                answer = 1
+                        except NoSuchElementException:
+                            pass
+
                         print(f'{chapter_title}/{name} 课堂练习 {number}')
                         print(f'{question_wrapper.find_element(By.CSS_SELECTOR, "div.question-body").text}')
                         print(f'尝试选择答案{answer}')
