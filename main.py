@@ -37,7 +37,7 @@ logger.addHandler(file_handler)
 
 
 def short_sleep():
-    interval = random.uniform(2, 4)
+    interval = random.uniform(4, 8)
     time.sleep(interval)
 
 
@@ -110,9 +110,10 @@ def login_dialog(image_base64=None) -> tuple:
 
 def public_required_course():
     chrome_options = uc.ChromeOptions()
-    chrome_options.add_argument('--headless')
-    driver = uc.Chrome(options=chrome_options,
-                       driver_executable_path='./undetected_chromedriver.exe')
+    # chrome_options.add_argument('--headless')
+    # driver = uc.Chrome(options=chrome_options,
+    #                    driver_executable_path='./undetected_chromedriver.exe')
+    driver = uc.Chrome(options=chrome_options)
 
     # 登录页
     driver.get('https://jsglpt.gdedu.gov.cn/login.jsp')
@@ -177,7 +178,7 @@ def public_required_course():
         chapter_total = len(toc)
         print(f'共{chapter_total}个章节')
         # TODO: change back to 0
-        for i in range(20, chapter_total):
+        for i in range(0, chapter_total):
             # 规避刷新页面后element失效导致的selenium.common.exceptions.StaleElementReferenceException
             toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
             chapter = toc[i]
@@ -238,11 +239,12 @@ def public_required_course():
 def happy_holiday():
     chrome_options = uc.ChromeOptions()
     # chrome_options.add_argument('--headless')
-    driver = uc.Chrome(options=chrome_options,
-                       driver_executable_path='./undetected_chromedriver.exe')
+    driver = uc.Chrome(options=chrome_options,)
+                       #driver_executable_path='./undetected_chromedriver.exe')
 
     # 登录页
-    driver.get('https://teacher.higher.smartedu.cn/h/subject/teaching/')
+    driver.get('https://teacher.higher.smartedu.cn/h/subject/summer2024/')
+    #driver.get('https://teacher.vocational.smartedu.cn/h/subject/winter2024/')
     login_element = driver.find_element(By.CSS_SELECTOR, '#loginHtml > div > div.register > a')
     login_element.click()
     username, password, _ = login_dialog()
@@ -260,7 +262,7 @@ def happy_holiday():
     password_element.send_keys(password)
     submit_element = driver.find_element(By.XPATH, '//span[text()="登录"]').find_element(By.XPATH, '..')
     submit_element.click()
-    # driver.switch_to.default_content()
+    driver.switch_to.default_content()
     # 登录成功
     short_sleep()
     print(driver.find_element(By.CSS_SELECTOR, '#realname_text').text)
@@ -292,7 +294,6 @@ def happy_holiday():
         # 遍历目录
         toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
         for i in range(len(toc)):
-            lesson = toc[i]
             # 处理学习指南弹窗
             try:
                 driver.find_element(By.CSS_SELECTOR, '#notice-dialog > div.guide-footer > label > input').click()
@@ -308,11 +309,12 @@ def happy_holiday():
             try:
                 driver.find_element(By.CSS_SELECTOR, 'div.layui-layer-btn > a').click()
                 toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
-                lesson = toc[i]
                 short_sleep()
             except NoSuchElementException:
                 pass
 
+            toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
+            lesson = toc[i]
             chapter_title = lesson.parent.find_element(By.CSS_SELECTOR, '.chapter-title').text
             name = lesson.find_element(By.CSS_SELECTOR, 'span.two').text
 
@@ -393,6 +395,9 @@ def happy_holiday():
                     pass
 
                 video_player = driver.find_element(By.CSS_SELECTOR, '#video-Player')
+                if 'xgplayer-is-replay' in video_player.get_attribute('class'):
+                    print(f'{chapter_title}/{name} 已完成')
+                    break
                 if 'xgplayer-pause' in video_player.get_attribute('class'):
                     try:
                         video_player.find_element(By.CSS_SELECTOR, 'xg-start').click()
@@ -442,7 +447,7 @@ if __name__ == '__main__':
     try:
         print(r'''
 1. 公需课
-2. 暑期教师研修班
+2. 教师研修班
         ''')
         scene = input('选择：')
         if scene == '1':
