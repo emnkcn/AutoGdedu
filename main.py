@@ -6,8 +6,10 @@ import re
 import time
 import traceback
 
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException
+from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, TimeoutException, ElementNotInteractableException
+from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 import undetected_chromedriver as uc
 import json
@@ -117,7 +119,9 @@ def public_required_course():
 
     # 登录页
     driver.get('https://jsglpt.gdedu.gov.cn/login.jsp')
-    short_sleep()
+    WebDriverWait(driver, 10).until(
+        lambda driver: driver.execute_script("return document.readyState") == "complete"
+    )
     captcha_image_element = driver.find_element(by=By.ID, value='loginCaptcha')
     captcha_image_base64 = captcha_image_element.get_attribute('src')
 
@@ -137,8 +141,9 @@ def public_required_course():
 
     submit_button = driver.find_element(by=By.CSS_SELECTOR, value='.main-btn1.btn')
     submit_button.click()
-    short_sleep()
-
+    WebDriverWait(driver, 10).until(
+        lambda driver: driver.execute_script("return document.readyState") == "complete"
+    )
     # 检查是否登录成功
     login_hint = driver.find_elements(by=By.CSS_SELECTOR, value='.login-popup-hint')
     if len(login_hint) > 0:
@@ -156,24 +161,34 @@ def public_required_course():
     except NoSuchElementException:
         pass
 
-    public_required_course_button = driver.find_element(by=By.CSS_SELECTOR, value='#menu_publicStudy > a')
+    public_required_course_button = driver.find_element(by=By.CSS_SELECTOR, value='#g-user-cont > div.g-mn > ul > li:nth-child(4) > a')
+    window_num = len(driver.window_handles)
     public_required_course_button.click()
+    WebDriverWait(driver, 10).until(lambda driver: len(driver.window_handles) != window_num)
 
     # 切换到公需课页面
     driver.switch_to.window(driver.window_handles[-1])
     course_list_handle = driver.current_window_handle
-    # driver.save_screenshot('public_required_course.png')
+    WebDriverWait(driver, 10).until(
+        lambda driver: driver.execute_script("return document.readyState") == "complete"
+    )
+    driver.save_screenshot('public_required_course.png')
 
     start_course_buttons = driver.find_elements(by=By.LINK_TEXT, value='开始学习')
     print(f'未完成学习课程数量：{len(start_course_buttons)}')
     for start_course_button in start_course_buttons:
         course_name = start_course_button.find_element(by=By.XPATH, value='./preceding-sibling::*[3]').text
         print(f'开始学习课程《{course_name}》')
-        short_sleep()
+        window_num = len(driver.window_handles)
+        url = start_course_button.get_attribute('href')
         start_course_button.click()
+        WebDriverWait(driver, 10).until(lambda driver: len(driver.window_handles) != window_num)
         # 切换到课程页面
         driver.switch_to.window(driver.window_handles[-1])
-        # driver.save_screenshot(f'{course_name}.png')
+        WebDriverWait(driver, 10).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete"
+        )
+        driver.save_screenshot(f'{course_name}.png')
         toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
         chapter_total = len(toc)
         print(f'共{chapter_total}个章节')
@@ -182,7 +197,6 @@ def public_required_course():
             # 规避刷新页面后element失效导致的selenium.common.exceptions.StaleElementReferenceException
             toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
             chapter = toc[i]
-            short_sleep()
             heading = chapter.find_element(by=By.XPATH, value='../../child::*[1]')
             if heading.get_attribute('class') != 'z-crt':
                 if not heading.is_displayed():
@@ -243,8 +257,8 @@ def happy_holiday():
                        #driver_executable_path='./undetected_chromedriver.exe')
 
     # 登录页
-    driver.get('https://teacher.higher.smartedu.cn/h/subject/summer2024/')
-    #driver.get('https://teacher.vocational.smartedu.cn/h/subject/winter2024/')
+    #driver.get('https://teacher.higher.smartedu.cn/h/subject/summer2024/')
+    driver.get('https://teacher.vocational.smartedu.cn/h/subject/summer2024/')
     login_element = driver.find_element(By.CSS_SELECTOR, '#loginHtml > div > div.register > a')
     login_element.click()
     username, password, _ = login_dialog()
@@ -302,7 +316,7 @@ def happy_holiday():
                     EC.element_to_be_clickable((By.CSS_SELECTOR, '#guideKnow')))
                 guide_know_element.click()
                 short_sleep()
-            except NoSuchElementException:
+            except (NoSuchElementException, TimeoutException):
                 pass
 
             # 处理提示弹窗
@@ -395,6 +409,7 @@ def happy_holiday():
                     pass
 
                 video_player = driver.find_element(By.CSS_SELECTOR, '#video-Player')
+                actions = ActionChains(driver)
                 if 'xgplayer-is-replay' in video_player.get_attribute('class'):
                     print(f'{chapter_title}/{name} 已完成')
                     break
@@ -409,9 +424,21 @@ def happy_holiday():
                             pass
                 if 'xgplayer-volume-muted' not in video_player.get_attribute('class'):
                     try:
-                        video_player.find_element(By.CSS_SELECTOR, 'xg-volume').click()
+                        actions.move_to_element(video_player).perform()
+                        video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-volume').click()
                     except Exception:
                         pass
+                try:
+                    actions.move_to_element(video_player).perform()
+                    playbackrate = video_player.find_element(By.CSS_SELECTOR, '#video-Player > xg-controls > xg-playbackrate > p')
+                    actions.move_to_element(playbackrate)
+                    actions.perform()
+                    rate2 = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-playbackrate > ul > li:nth-child(1)')
+                    #actions = ActionChains(driver).move_to_element(rate2)
+                    #actions.perform()
+                    rate2.click()
+                except (NoSuchElementException, ElementNotInteractableException):
+                    pass
 
                 current_lesson = driver.find_element(By.CSS_SELECTOR, '#video-tabContent div.video-title.clearfix.on')
                 progress = current_lesson.find_element(By.CSS_SELECTOR, '.four').text
