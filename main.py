@@ -119,7 +119,7 @@ def public_required_course():
 
     # 登录页
     driver.get('https://jsglpt.gdedu.gov.cn/login.jsp')
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 30).until(
         lambda driver: driver.execute_script("return document.readyState") == "complete"
     )
     captcha_image_element = driver.find_element(by=By.ID, value='loginCaptcha')
@@ -141,7 +141,7 @@ def public_required_course():
 
     submit_button = driver.find_element(by=By.CSS_SELECTOR, value='.main-btn1.btn')
     submit_button.click()
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 30).until(
         lambda driver: driver.execute_script("return document.readyState") == "complete"
     )
     # 检查是否登录成功
@@ -164,12 +164,12 @@ def public_required_course():
     public_required_course_button = driver.find_element(by=By.CSS_SELECTOR, value='#g-user-cont > div.g-mn > ul > li:nth-child(4) > a')
     window_num = len(driver.window_handles)
     public_required_course_button.click()
-    WebDriverWait(driver, 10).until(lambda driver: len(driver.window_handles) != window_num)
+    WebDriverWait(driver, 30).until(lambda driver: len(driver.window_handles) != window_num)
 
     # 切换到公需课页面
     driver.switch_to.window(driver.window_handles[-1])
     course_list_handle = driver.current_window_handle
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, 30).until(
         lambda driver: driver.execute_script("return document.readyState") == "complete"
     )
     driver.save_screenshot('public_required_course.png')
@@ -182,10 +182,10 @@ def public_required_course():
         window_num = len(driver.window_handles)
         url = start_course_button.get_attribute('href')
         start_course_button.click()
-        WebDriverWait(driver, 10).until(lambda driver: len(driver.window_handles) != window_num)
+        WebDriverWait(driver, 30).until(lambda driver: len(driver.window_handles) != window_num)
         # 切换到课程页面
         driver.switch_to.window(driver.window_handles[-1])
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 30).until(
             lambda driver: driver.execute_script("return document.readyState") == "complete"
         )
         driver.save_screenshot(f'{course_name}.png')
@@ -202,7 +202,9 @@ def public_required_course():
                 if not heading.is_displayed():
                     driver.execute_script("arguments[0].scrollIntoView();", heading)
                 heading.click()
-                short_sleep()
+                WebDriverWait(driver, 30).until(
+                    lambda driver: heading.get_attribute('class') == 'z-crt'
+                )
             chapter_name = heading.text + '/' + chapter.text
             if not chapter.is_displayed():
                 driver.execute_script("arguments[0].scrollIntoView();", chapter)
@@ -243,7 +245,27 @@ def public_required_course():
                     except NoSuchElementException:
                         pass
 
-                    long_sleep()
+                    driver.execute_script('player.videoMute();')
+                    # 获取页面的宽度和高度
+                    window_width = driver.execute_script("return window.innerWidth")
+                    window_height = driver.execute_script("return window.innerHeight")
+                    # 创建 ActionChains 实例
+                    action = ActionChains(driver)
+                    # 随机滑动鼠标
+                    msg = ''
+                    try:
+                        for _ in range(10):  # 进行 10 次随机滑动
+                            time.sleep(1)  # 控制滑动速度
+                            # 生成随机坐标
+                            random_x = random.randint(0, 100)
+                            random_y = random.randint(0, 100)
+                            msg = f'x:{random_x},y:{random_y}'
+
+                            # 移动鼠标到随机坐标
+                            action.move_to_element_with_offset(driver.find_element("tag name", "body"), random_x,
+                                                               random_y).perform()
+                    except Exception as e:
+                        print("发生错误:", str(e) + msg)
         print(f'课程《{course_name}》学习完成')
         driver.close()
         driver.switch_to.window(course_list_handle)
@@ -301,7 +323,7 @@ def happy_holiday():
         # 切换到课程目录页面
         driver.switch_to.window(driver.window_handles[-1])
         # 开始学习
-        WebDriverWait(driver, 20).until(
+        WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, '#startStudy'))).click()
         short_sleep()
 
@@ -312,7 +334,7 @@ def happy_holiday():
             try:
                 driver.find_element(By.CSS_SELECTOR, '#notice-dialog > div.guide-footer > label > input').click()
                 time.sleep(10)
-                guide_know_element = WebDriverWait(driver, 20).until(
+                guide_know_element = WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, '#guideKnow')))
                 guide_know_element.click()
                 short_sleep()
