@@ -462,12 +462,13 @@ def happy_holiday():
                 try:
                     actions.move_to_element(video_player).perform()
                     playbackrate = video_player.find_element(By.CSS_SELECTOR, '#video-Player > xg-controls > xg-playbackrate > p')
-                    actions.move_to_element(playbackrate)
-                    actions.perform()
-                    rate2 = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-playbackrate > ul > li:nth-child(1)')
-                    #actions = ActionChains(driver).move_to_element(rate2)
-                    #actions.perform()
-                    rate2.click()
+                    if playbackrate.text == '1x':
+                        actions.move_to_element(playbackrate)
+                        actions.perform()
+                        rate2 = video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-playbackrate > ul > li:nth-child(1)')
+                        #actions = ActionChains(driver).move_to_element(rate2)
+                        #actions.perform()
+                        rate2.click()
                 except (NoSuchElementException, ElementNotInteractableException):
                     pass
 
@@ -479,6 +480,7 @@ def happy_holiday():
                     print(f'{chapter_title}/{name} 已完成')
                     break
 
+                #TODO:
                 # 判断学时有没有修够，修够就换下一课
                 toc = driver.find_elements(By.CSS_SELECTOR, 'div.video-title')
                 total_viewed_time = 0
@@ -488,17 +490,13 @@ def happy_holiday():
                     pattern = r'\d+'
                     numbers = re.findall(pattern, item.find_element(By.CSS_SELECTOR, 'span.three').text)
                     total_viewed_time += int(numbers[1]) + int(numbers[0]) * 60
+                print(f'{chapter_title} 已修章节总时间/需修时间 {total_viewed_time}/{time_needed}')
                 if total_viewed_time > time_needed:
-                    print(f'{chapter_title}/{name} 已修时间 {total_viewed_time}')
                     break
-
                 long_sleep()
         driver.close()
         driver.switch_to.window(class_list_handle)
-
-    short_sleep()
-    input('hi')
-    time.sleep(60)
+    print(f'全部完成')
 
 
 if __name__ == '__main__':
@@ -515,4 +513,3 @@ if __name__ == '__main__':
     except Exception as e:
         print(traceback.format_exc())
         logger.error(traceback.format_exc())
-        input()
