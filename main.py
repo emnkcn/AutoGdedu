@@ -6,6 +6,7 @@ import re
 import time
 import traceback
 
+from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, TimeoutException, ElementNotInteractableException
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
@@ -111,11 +112,14 @@ def login_dialog(image_base64=None) -> tuple:
 
 
 def public_required_course():
-    chrome_options = uc.ChromeOptions()
+    # chrome_options = uc.ChromeOptions()
     # chrome_options.add_argument('--headless')
     # driver = uc.Chrome(options=chrome_options,
     #                    driver_executable_path='./undetected_chromedriver.exe')
-    driver = uc.Chrome(options=chrome_options)
+    # driver = uc.Chrome(options=chrome_options)
+    options = webdriver.EdgeOptions()
+    options.add_argument("--no-sandbox")
+    driver = webdriver.Edge(options=options)
 
     # 登录页
     driver.get('https://jsglpt.gdedu.gov.cn/login.jsp')
@@ -273,14 +277,18 @@ def public_required_course():
 
 
 def happy_holiday():
-    chrome_options = uc.ChromeOptions()
-    # chrome_options.add_argument('--headless')
-    driver = uc.Chrome(options=chrome_options,)
+    #chrome_options = uc.ChromeOptions()
+    #chrome_options.add_argument('--headless')
+    #driver = uc.Chrome(options=chrome_options,)
                        #driver_executable_path='./undetected_chromedriver.exe')
 
+    options = webdriver.EdgeOptions()
+    options.add_argument("--no-sandbox")
+    driver = webdriver.Edge(options=options)
+
     # 登录页
-    #driver.get('https://teacher.higher.smartedu.cn/h/subject/summer2024/')
-    driver.get('https://teacher.vocational.smartedu.cn/h/subject/summer2024/')
+    #driver.get('https://teacher.higher.smartedu.cn/h/subject/winter2025/')
+    driver.get('https://teacher.vocational.smartedu.cn/h/subject/winter2025/')
     login_element = driver.find_element(By.CSS_SELECTOR, '#loginHtml > div > div.register > a')
     login_element.click()
     username, password, _ = login_dialog()
@@ -450,6 +458,7 @@ def happy_holiday():
                         video_player.find_element(By.CSS_SELECTOR, 'xg-controls > xg-volume').click()
                     except Exception:
                         pass
+                # 二倍速
                 try:
                     actions.move_to_element(video_player).perform()
                     playbackrate = video_player.find_element(By.CSS_SELECTOR, '#video-Player > xg-controls > xg-playbackrate > p')
