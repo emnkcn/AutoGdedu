@@ -1,23 +1,35 @@
+# 导入标准库
+import json
 import logging
 import math
-import pickle
 import random
 import re
 import sys
 import time
 import traceback
+
+# 导入第三方库
+from io import BytesIO
+from PIL import Image, ImageTk
+import base64
+import pickle
+
+# 导入Selenium相关库
 from selenium import webdriver
 from selenium.common import WebDriverException
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, TimeoutException, ElementNotInteractableException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    TimeoutException,
+    ElementNotInteractableException
+)
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-import json
+
+# 导入tkinter库
 import tkinter as tk
-from io import BytesIO
-from PIL import Image, ImageTk
-import base64
 
 
 scene = 0
@@ -90,7 +102,7 @@ def login_dialog(image_base64=None) -> tuple:
     password = ''
     captcha = ''
 
-    def login_button_click(e=None):
+    def login_button_click():
         nonlocal username, password, captcha
         username = username_entry.get()
         password = password_entry.get()
