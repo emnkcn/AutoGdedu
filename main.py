@@ -3,51 +3,55 @@ import math
 import pickle
 import random
 import re
+import sys
 import time
 import traceback
-
 from selenium import webdriver
+from selenium.common import WebDriverException
 from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, TimeoutException, ElementNotInteractableException
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
-import undetected_chromedriver as uc
+from selenium.webdriver.support.wait import WebDriverWait
 import json
 import tkinter as tk
 from io import BytesIO
 from PIL import Image, ImageTk
 import base64
 
-from selenium.webdriver.support.wait import WebDriverWait
 
 scene = 0
 
-# 配置日志记录器
+# 配置 logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)
-
-# 创建文件处理器
-file_handler = logging.FileHandler('error.log')
-file_handler.setLevel(logging.ERROR)
-
-# 配置日志格式
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger.setLevel(logging.DEBUG)  # 设置全局日志级别
+formatter = logging.Formatter(
+    '%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(name)s %(message)s'
+)
+file_handler = logging.FileHandler('error.log', mode='w')
 file_handler.setFormatter(formatter)
-
-# 将处理器添加到记录器
+file_handler.setLevel(logging.ERROR)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
 logger.addHandler(file_handler)
-
+logger.addHandler(console_handler)
 
 def short_sleep():
     interval = random.uniform(4, 8)
     time.sleep(interval)
 
-
 def long_sleep():
     interval = random.uniform(30, 60)
     time.sleep(interval)
 
+def until_ready():
+    WebDriverWait(driver, 30).until(
+        lambda driver: driver.execute_script('''
+return document.readyState === 'complete' && 
+       (typeof jQuery === 'undefined' || jQuery.active === 0) &&
+       (typeof angular === 'undefined' || angular.element(document).injector().get('$http').pendingRequests.length === 0);
+'''))
 
 def login_dialog(image_base64=None) -> tuple:
     root = tk.Tk()
@@ -92,6 +96,7 @@ def login_dialog(image_base64=None) -> tuple:
         password = password_entry.get()
         if image_base64 is not None:
             captcha = captcha_entry.get()
+        root.quit()
         root.destroy()
 
     if image_base64 is not None:
@@ -112,20 +117,33 @@ def login_dialog(image_base64=None) -> tuple:
 
 
 def public_required_course():
-    # chrome_options = uc.ChromeOptions()
-    # chrome_options.add_argument('--headless')
-    # driver = uc.Chrome(options=chrome_options,
-    #                    driver_executable_path='./undetected_chromedriver.exe')
-    # driver = uc.Chrome(options=chrome_options)
-    options = webdriver.EdgeOptions()
-    options.add_argument("--no-sandbox")
-    driver = webdriver.Edge(options=options)
+    def answer_question():
+        try:
+            # 出现答题弹窗
+            question = driver.find_element(by=By.ID, value='questionDiv')
+            logger.debug(question.get_attribute('outerHTML'))
+            function_code = driver.execute_script("return window.finishTest.toString();")
+            # 提取if ('Choice0'.includes(',')) {中的 Choice0
+            pattern = r"if \('([^']+)'\.includes"
+            match = re.search(pattern, function_code)
+            answer = ''
+            if match:
+                answer: str = match.group(1)
+                logger.info(f"提取的答案是: {answer}")
+            else:
+                logger.error(f"提取答案失败 {function_code}")
+            answer_list = [answer, ]
+            if ',' in answer:
+                answer_list = json.loads(answer)
+            for choice in answer_list:
+                driver.find_element(by=By.CSS_SELECTOR, value=f'input[name="response"][value="{choice}"]').click()
+            driver.find_element(by=By.CSS_SELECTOR, value='#questionDiv > div > div > div > div > a > button').click()
+        except NoSuchElementException:
+            pass
 
     # 登录页
     driver.get('https://jsglpt.gdedu.gov.cn/login.jsp')
-    WebDriverWait(driver, 30).until(
-        lambda driver: driver.execute_script("return document.readyState") == "complete"
-    )
+    until_ready()
     captcha_image_element = driver.find_element(by=By.ID, value='loginCaptcha')
     captcha_image_base64 = captcha_image_element.get_attribute('src')
 
@@ -133,7 +151,7 @@ def public_required_course():
     if username and password and captcha:
         pass
     else:
-        print('未输入全部信息')
+        logger.error('未输入全部信息')
         return
 
     username_element = driver.find_element(by=By.ID, value="userName")
@@ -145,14 +163,13 @@ def public_required_course():
 
     submit_button = driver.find_element(by=By.CSS_SELECTOR, value='.main-btn1.btn')
     submit_button.click()
-    WebDriverWait(driver, 30).until(
-        lambda driver: driver.execute_script("return document.readyState") == "complete"
-    )
+    until_ready()
+    short_sleep() # TODO: 各种显示等待都没搞定
     # 检查是否登录成功
-    login_hint = driver.find_elements(by=By.CSS_SELECTOR, value='.login-popup-hint')
+    login_hint = driver.find_elements(By.CSS_SELECTOR, '.login-popup-hint')
     if len(login_hint) > 0:
         hint = ''.join(list(map(lambda e: e.text, login_hint)))
-        print(f'登录失败：{hint}')
+        logger.error(f'登录失败：{hint}')
         return
 
     # 登录成功页面
@@ -173,33 +190,30 @@ def public_required_course():
     # 切换到公需课页面
     driver.switch_to.window(driver.window_handles[-1])
     course_list_handle = driver.current_window_handle
-    WebDriverWait(driver, 30).until(
-        lambda driver: driver.execute_script("return document.readyState") == "complete"
-    )
+    until_ready()
     driver.save_screenshot('public_required_course.png')
 
     start_course_buttons = driver.find_elements(by=By.LINK_TEXT, value='开始学习')
-    print(f'未完成学习课程数量：{len(start_course_buttons)}')
+    logger.info(f'未完成学习课程数量：{len(start_course_buttons)}')
     for start_course_button in start_course_buttons:
         course_name = start_course_button.find_element(by=By.XPATH, value='./preceding-sibling::*[3]').text
-        print(f'开始学习课程《{course_name}》')
+        logger.info(f'开始学习课程《{course_name}》')
         window_num = len(driver.window_handles)
-        url = start_course_button.get_attribute('href')
         start_course_button.click()
         WebDriverWait(driver, 30).until(lambda driver: len(driver.window_handles) != window_num)
         # 切换到课程页面
         driver.switch_to.window(driver.window_handles[-1])
-        WebDriverWait(driver, 30).until(
-            lambda driver: driver.execute_script("return document.readyState") == "complete"
-        )
+        until_ready()
         driver.save_screenshot(f'{course_name}.png')
         toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
         chapter_total = len(toc)
-        print(f'共{chapter_total}个章节')
-        # TODO: change back to 0
+        logger.info(f'共{chapter_total}个章节')
         for i in range(0, chapter_total):
             # 规避刷新页面后element失效导致的selenium.common.exceptions.StaleElementReferenceException
+            short_sleep()
             toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
+            if i >= len(toc):
+                break
             chapter = toc[i]
             heading = chapter.find_element(by=By.XPATH, value='../../child::*[1]')
             if heading.get_attribute('class') != 'z-crt':
@@ -209,86 +223,55 @@ def public_required_course():
                 WebDriverWait(driver, 30).until(
                     lambda driver: heading.get_attribute('class') == 'z-crt'
                 )
+                toc = driver.find_elements(by=By.CSS_SELECTOR, value='.section.tt-s')
+                chapter = toc[i]
             chapter_name = heading.text + '/' + chapter.text
             if not chapter.is_displayed():
                 driver.execute_script("arguments[0].scrollIntoView();", chapter)
             chapter.click()
+            until_ready()
             prompt = driver.find_element(by=By.CSS_SELECTOR, value='.g-study-prompt')
             if '您已完成观看' in prompt.text:
-                print(f'{chapter_name} 已完成')
+                logger.info(f'{chapter_name} 已完成')
             else:
+                answer_question()
                 try:
                     driver.find_element(by=By.ID, value='playerDiv')
                 except NoSuchElementException:
-                    #  TODO: 处理答题页面
-                    print(f'{chapter_name} 章节无视频，跳过')
+                    logger.info(f'{chapter_name} 章节无视频，跳过')
                     continue
-                print(f'{chapter_name} 开始学习')
-                short_sleep()
+                logger.info(f'{chapter_name} 开始学习')
                 driver.execute_script('player.playOrPause();player.videoMute();')
-                time.sleep(5)
                 while True:
                     meta = json.loads(driver.execute_script('return JSON.stringify(player.getMetaDate());'))
                     duration = meta['duration']
                     cur_time = driver.execute_script('return player.time')
-                    # driver.save_screenshot(f'{chapter.text}_{cur_time}.png')
-                    print(f'{chapter_name} 播放进度：{cur_time}/{duration}')
+                    logger.info(f'{chapter_name} 播放进度：{cur_time}/{duration}')
                     if math.isclose(cur_time, duration, abs_tol=0.1):
-                        print(f'{chapter_name} 已完成观看')
+                        logger.info(f'{chapter_name} 已完成观看')
                         break
 
                     # 有时会播放时间错误，导致没有播完就暂停
                     if meta['paused']:
                         driver.execute_script('player.playOrPause();player.videoMute();')
 
-                    try:
-                        # 出现答题弹窗
-                        driver.find_element(by=By.ID, value='questionDiv')
-                        driver.execute_script("$('#questionDiv').stopTime('C');$('.mylayer-closeico').trigger("
-                                              "'click');player.videoPlay();")
-                    except NoSuchElementException:
-                        pass
-
+                    answer_question()
                     driver.execute_script('player.videoMute();')
-                    # 获取页面的宽度和高度
-                    window_width = driver.execute_script("return window.innerWidth")
-                    window_height = driver.execute_script("return window.innerHeight")
-                    # 创建 ActionChains 实例
-                    action = ActionChains(driver)
-                    # 随机滑动鼠标
-                    msg = ''
-                    try:
-                        for _ in range(10):  # 进行 10 次随机滑动
-                            time.sleep(1)  # 控制滑动速度
-                            # 生成随机坐标
-                            random_x = random.randint(0, 100)
-                            random_y = random.randint(0, 100)
-                            msg = f'x:{random_x},y:{random_y}'
-
-                            # 移动鼠标到随机坐标
-                            action.move_to_element_with_offset(driver.find_element("tag name", "body"), random_x,
-                                                               random_y).perform()
-                    except Exception as e:
-                        print("发生错误:", str(e) + msg)
-        print(f'课程《{course_name}》学习完成')
+                    short_sleep()
+        logger.info(f'课程《{course_name}》学习完成')
         driver.close()
         driver.switch_to.window(course_list_handle)
-    print(f'全部完成')
+    logger.info(f'全部完成')
 
 
 def happy_holiday():
-    #chrome_options = uc.ChromeOptions()
-    #chrome_options.add_argument('--headless')
-    #driver = uc.Chrome(options=chrome_options,)
-                       #driver_executable_path='./undetected_chromedriver.exe')
-
-    options = webdriver.EdgeOptions()
-    options.add_argument("--no-sandbox")
-    driver = webdriver.Edge(options=options)
-
     # 登录页
-    #driver.get('https://teacher.higher.smartedu.cn/h/subject/winter2025/')
-    driver.get('https://teacher.vocational.smartedu.cn/h/subject/winter2025/')
+    if scene == 2:
+        driver.get('https://teacher.higher.smartedu.cn/h/subject/winter2025/')
+    elif scene == 3:
+        driver.get('https://teacher.vocational.smartedu.cn/h/subject/winter2025/')
+    else:
+        return
     login_element = driver.find_element(By.CSS_SELECTOR, '#loginHtml > div > div.register > a')
     login_element.click()
     username, password, _ = login_dialog()
@@ -500,16 +483,30 @@ def happy_holiday():
 
 
 if __name__ == '__main__':
+    options = webdriver.EdgeOptions()
+    options.add_argument("--no-sandbox")
+    driver = webdriver.Edge(options=options)
+
     try:
         print(r'''
 1. 公需课
-2. 教师研修班
+2. 教师研修班（本科）
+3. 教师研修班（高职）
         ''')
         scene = input('选择：')
         if scene == '1':
             public_required_course()
-        else:
+        elif scene == '2' or scene == '3':
             happy_holiday()
+        else:
+            logger.error(f'Scene不存在:{scene}')
+    except WebDriverException as e:
+        logger.error(str(e))
+        logger.error(traceback.format_exc())
+        file_name = f'scene_{scene}'
+        with open(f'{file_name}.html', 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+        driver.save_screenshot(f'{file_name}.png')
     except Exception as e:
-        print(traceback.format_exc())
+        logger.error(str(e))
         logger.error(traceback.format_exc())
