@@ -497,6 +497,14 @@ def happy_holiday():
 if __name__ == '__main__':
     options = webdriver.EdgeOptions()
     options.add_argument("--no-sandbox")
+    # 禁用后台定时器限流
+    options.add_argument("--disable-background-timer-throttling")
+    # 禁用隐藏窗口的后台处理
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    # 禁用渲染器后台化
+    options.add_argument("--disable-renderer-backgrounding")
+    # 禁用休眠
+    options.add_argument("--disable-features=CalculateNativeWinOcclusion")
     driver = webdriver.Edge(options=options)
 
     try:
