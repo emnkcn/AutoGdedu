@@ -242,6 +242,12 @@ def public_required_course():
                 driver.execute_script("arguments[0].scrollIntoView();", chapter)
             chapter.click()
             until_ready()
+            try:
+                if '当前活动：《考核》' in driver.find_element(by=By.CSS_SELECTOR, value='#studySelectAct > p').text:
+                    logger.info('已学完')
+                    break
+            except NoSuchElementException:
+                pass
             prompt = driver.find_element(by=By.CSS_SELECTOR, value='.g-study-prompt')
             if '您已完成观看' in prompt.text:
                 logger.info(f'{chapter_name} 已完成')
@@ -253,7 +259,9 @@ def public_required_course():
                     logger.info(f'{chapter_name} 章节无视频，跳过')
                     continue
                 logger.info(f'{chapter_name} 开始学习')
-                driver.execute_script('player.playOrPause();player.videoMute();')
+                time_viewed = int(driver.find_element(by=By.CSS_SELECTOR, value='#viewTimeTxt').text) * 60
+                driver.execute_script(f'player.videoSeek({time_viewed})')
+                driver.execute_script('player.videoPlay();player.videoMute();')
                 while True:
                     meta = json.loads(driver.execute_script('return JSON.stringify(player.getMetaDate());'))
                     duration = meta['duration']
